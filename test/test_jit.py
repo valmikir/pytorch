@@ -4300,6 +4300,26 @@ graph(%Ra, %Rb):
         model = Bar()
         self.checkTrace(model, x)
 
+    def test_trace_dict_output(self):
+
+        class TraceDictStrTensor(torch.nn.Module):
+            def forward(self, a, b):
+                return {'a': a, 'b': b}
+
+        class TraceDictTensorTensor(torch.nn.Module):
+            def forward(self, a, b):
+                return {a: b, b: a}
+
+        x = (torch.rand(3), torch.rand(3))
+        with self.assertRaisesRegex(RuntimeError, r"Encountering a dict at the output"):
+            torch.jit.trace(TraceDictStrTensor(), x)
+
+        traced_dict_str_mod = torch.jit.trace(TraceDictStrTensor(), x, strict=False)
+        self.assertEqual(traced_dict_str_mod(*x), {'a': x[0], 'b': x[1]})
+
+        traced_dict_tensor_mod = torch.jit.trace(TraceDictTensorTensor(), x, strict=False)
+        self.assertEqual(traced_dict_tensor_mod(*x), {x[0]: x[1], x[1]: x[0]})
+
     def test_trace_with_tensor_list_output(self):
         def f():
             return [torch.zeros(1), torch.zeros(5)]
@@ -4318,7 +4338,6 @@ graph(%Ra, %Rb):
             return [[torch.zeros(1)], [torch.zeros(5)]]
         with self.assertRaisesRegex(RuntimeError, r"Only tensors.+can be output from traced functions"):
             traced_f = torch.jit.trace(f, [])
-
 
     def test_trace_variable_instantiation(self):
         def random_foo(x):
